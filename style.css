@@ -22,7 +22,7 @@
   --veil: rgba(14, 18, 26, 0.92);
 
   --f-display: "Bodoni Moda", "Bodoni 72", Didot, Georgia, serif;
-  --f-body: "Zen Kaku Gothic New", "Hiragino Sans", "Noto Sans JP", "Yu Gothic", system-ui, sans-serif;
+  --f-body: "Shippori Mincho B1", "Hiragino Mincho ProN", "Yu Mincho", YuMincho, "Noto Serif JP", serif;
   --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
 
   --step--1: 0.78rem;
@@ -47,8 +47,11 @@ body {
     radial-gradient(50rem 30rem at 90% 100%, rgba(29, 74, 64, 0.25), transparent 70%),
     var(--ink);
   font-family: var(--f-body);
+  font-weight: 500;
   font-size: var(--step-0);
   line-height: 1.6;
+  letter-spacing: 0.02em;
+  font-feature-settings: "palt";
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -113,8 +116,9 @@ button:focus-visible, input:focus-visible {
 .purse-item:first-child { border-left: 0; margin-left: 0; padding-left: 0; }
 
 .purse dt {
-  font-family: var(--f-mono);
-  font-size: 0.66rem;
+  font-family: var(--f-body);
+  font-size: 0.74rem;
+  font-weight: 600;
   letter-spacing: 0.18em;
   color: var(--mute);
 }
@@ -225,9 +229,9 @@ button:focus-visible, input:focus-visible {
 .medal.vert { background: var(--vert); }
 
 .announce-line {
-  font-family: var(--f-mono);
+  font-family: var(--f-body);
   font-size: var(--step--1);
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 0.16em;
   text-transform: uppercase;
   white-space: nowrap;
@@ -275,7 +279,7 @@ button:focus-visible, input:focus-visible {
 .call-ja {
   margin: 0;
   font-size: var(--step-1);
-  font-weight: 500;
+  font-weight: 600;
   color: var(--ivory);
   overflow-wrap: anywhere;
 }
@@ -291,7 +295,7 @@ button:focus-visible, input:focus-visible {
   border-radius: 6px;
   background: var(--brass);
   color: var(--brass-ink);
-  font-weight: 700;
+  font-weight: 800;
   font-size: var(--step-1);
   letter-spacing: 0.3em;
   text-indent: 0.3em;
@@ -325,7 +329,7 @@ button:focus-visible, input:focus-visible {
 }
 
 .slider output {
-  font-family: var(--f-mono);
+  font-family: var(--f-body);
   font-size: 0.74rem;
   color: var(--ivory);
   font-variant-numeric: tabular-nums;
@@ -381,7 +385,7 @@ button:focus-visible, input:focus-visible {
   border-radius: 6px;
   background: transparent;
   color: var(--mute);
-  font-family: var(--f-mono);
+  font-family: var(--f-body);
   font-size: 0.74rem;
   cursor: pointer;
 }
@@ -410,13 +414,14 @@ button:focus-visible, input:focus-visible {
 .table-head h2, .marquee-head h2 {
   margin: 0;
   font-size: var(--step-1);
-  font-weight: 700;
+  font-weight: 800;
+  letter-spacing: 0.08em;
 }
 
 .odds {
   margin: 0;
-  font-family: var(--f-mono);
-  font-size: 0.7rem;
+  font-family: var(--f-body);
+  font-size: 0.76rem;
   color: var(--mute);
 }
 
@@ -525,7 +530,8 @@ button:focus-visible, input:focus-visible {
 }
 
 .ja {
-  font-size: 0.66rem;
+  font-size: 0.7rem;
+  font-weight: 600;
   line-height: 1.2;
   color: rgba(236, 228, 211, 0.72);
 }
@@ -613,7 +619,7 @@ button:focus-visible, input:focus-visible {
   border-top: 1px solid var(--line);
 }
 
-.marquee-stats { font-family: var(--f-mono); font-size: 0.7rem; color: var(--mute); }
+.marquee-stats { font-family: var(--f-body); font-size: 0.76rem; color: var(--mute); }
 .marquee-stats .s-rouge { color: var(--rouge-text); }
 .marquee-stats .s-vert { color: var(--vert-text); }
 
