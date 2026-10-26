@@ -15,11 +15,11 @@
   const colorOf = (n) => (n === 0 ? 'green' : REDS.has(n) ? 'red' : 'black');
 
   const CHIPS = [
-    { v: 1, bg: '#f2f2f2', fg: '#222' },
-    { v: 5, bg: '#c62f2f', fg: '#fff' },
-    { v: 10, bg: '#2f5fc6', fg: '#fff' },
-    { v: 50, bg: '#2e8b4e', fg: '#fff' },
-    { v: 100, bg: '#1b1b1b', fg: '#f6dc84' },
+    { v: 1, bg: '#f2f0ea', edge: '#3a6ad1', fg: '#1d2b4f' },
+    { v: 5, bg: '#c62f2f', edge: '#fff', fg: '#fff' },
+    { v: 10, bg: '#2f5fc6', edge: '#fff', fg: '#fff' },
+    { v: 50, bg: '#2e8b4e', edge: '#fff', fg: '#fff' },
+    { v: 100, bg: '#1b1b1b', edge: '#d4af37', fg: '#f6dc84' },
   ];
 
   const OUTSIDE = [
@@ -44,7 +44,9 @@
     scene: $('scene'), wrap: $('wheelWrap'), fallback: $('fallback'),
     badge: $('resultBadge'), resultText: $('resultText'), spin: $('spinBtn'),
     wheelSpeed: $('wheelSpeed'), ballSpeed: $('ballSpeed'), wheelOut: $('wheelOut'), ballOut: $('ballOut'),
-    sound: $('soundBtn'), balance: $('balance'), staked: $('staked'),
+    sound: $('soundBtn'), balance: $('balance'), staked: $('staked'), delta: $('delta'),
+    announce: $('announce'), announceNum: $('announceNum'), announceSub: $('announceSub'),
+    coinLayer: $('coinLayer'), historyStats: $('historyStats'),
     chips: $('chips'), grid: $('grid'), outside: $('outside'),
     undo: $('undoBtn'), clear: $('clearBtn'), rebet: $('rebetBtn'), refill: $('refillBtn'), hint: $('hint'),
     history: $('history'), historyEmpty: $('historyEmpty'),
@@ -286,7 +288,7 @@
     scene.add(fill);
 
     const shadow = new THREE.Mesh(
-      new THREE.PlaneGeometry(3.4, 3.4),
+      new THREE.PlaneGeometry(3.0, 3.0),
       new THREE.MeshBasicMaterial({ map: shadowTexture(), transparent: true, depthWrite: false })
     );
     shadow.rotation.x = -Math.PI / 2;
@@ -477,6 +479,7 @@
     state.spinning = true;
     state.lastBets = [...state.bets];
     clearHits();
+    hideAnnounce(true);
     els.badge.hidden = true;
     els.resultText.className = 'result-text';
     els.resultText.textContent = 'ノー・モア・ベット…';
@@ -513,35 +516,105 @@
     els.badge.classList.add('pop');
 
     const colName = { red: '赤', black: '黒', green: '緑' }[col];
+    let sub;
     if (staked === 0) {
       els.resultText.className = 'result-text';
       els.resultText.textContent = `${n}(${colName})`;
+      sub = colName;
       sfx.clack();
     } else if (payout > 0) {
-      els.resultText.className = 'result-text win';
-      els.resultText.textContent = `当たり! ${payout} 枚獲得(+${payout - staked})`;
+      const net = payout - staked;
+      els.resultText.className = `result-text${net > 0 ? ' win' : ''}`;
+      if (net > 0) {
+        els.resultText.textContent = `当たり! ${payout} 枚獲得(+${net})`;
+        sub = `WIN +${net}`;
+        coinRain(net);
+      } else if (net === 0) {
+        els.resultText.textContent = `${payout} 枚戻り(±0)`;
+        sub = 'EVEN ±0';
+      } else {
+        els.resultText.textContent = `${payout} 枚戻り(−${-net})`;
+        sub = `−${-net}`;
+      }
       sfx.win();
       bump();
+      showDelta(net);
     } else {
       els.resultText.className = 'result-text lose';
       els.resultText.textContent = `ハズレ… −${staked} 枚`;
+      sub = `LOSE −${staked}`;
       sfx.lose();
+      showDelta(-staked);
     }
 
+    showAnnounce(n, col, sub, payout > 0);
     markHits(n);
     save();
-    renderAll();
+    renderAll(true);
+  }
+
+  // ---------- 演出 ----------
+  let announceTimer = 0;
+
+  function showAnnounce(n, col, sub, win) {
+    clearTimeout(announceTimer);
+    els.announceNum.className = `announce-num ${col}`;
+    els.announceNum.textContent = String(n);
+    els.announceSub.textContent = sub;
+    els.announceSub.className = `announce-sub${win ? ' win' : ''}`;
+    els.announce.classList.remove('out');
+    els.announce.hidden = false;
+    announceTimer = setTimeout(() => hideAnnounce(false), 2600);
+  }
+
+  function hideAnnounce(now) {
+    clearTimeout(announceTimer);
+    if (now || reducedMotion) {
+      els.announce.hidden = true;
+      return;
+    }
+    els.announce.classList.add('out');
+    announceTimer = setTimeout(() => { els.announce.hidden = true; }, 400);
+  }
+
+  function showDelta(v) {
+    if (!v) return;
+    els.delta.textContent = v > 0 ? `+${v}` : `−${-v}`;
+    els.delta.className = `delta ${v > 0 ? 'plus' : 'minus'}`;
+    void els.delta.offsetWidth;
+    els.delta.classList.add('show');
+  }
+
+  function coinRain(amount) {
+    if (reducedMotion) return;
+    const count = Math.min(36, 10 + Math.floor(amount / 15));
+    const h = els.wrap.clientHeight;
+    for (let i = 0; i < count; i++) {
+      const c = document.createElement('span');
+      c.className = 'falling-coin';
+      c.style.left = `${Math.random() * 96}%`;
+      c.style.setProperty('--delay', `${Math.random() * 0.7}s`);
+      c.style.setProperty('--d', `${1.2 + Math.random() * 0.9}s`);
+      c.style.setProperty('--fall', `${h + 40}px`);
+      const s = 14 + Math.random() * 12;
+      c.style.width = c.style.height = `${s}px`;
+      c.addEventListener('animationend', () => c.remove());
+      els.coinLayer.append(c);
+    }
   }
 
   // ---------- ベット ----------
   const cellEls = new Map(); // key -> button
 
-  function makeCell(key, label, cls, vars) {
+  function makeCell(key, label, numCls, cellCls, vars) {
     const b = document.createElement('button');
     b.type = 'button';
-    b.className = `cell ${cls}`;
+    b.className = `cell ${cellCls || ''}`;
     b.dataset.key = key;
-    b.textContent = label;
+    const num = document.createElement('span');
+    num.className = `num ${numCls || ''}`;
+    num.textContent = label;
+    b.append(num);
     Object.entries(vars || {}).forEach(([k, v]) => b.style.setProperty(`--${k}`, v));
     const stake = document.createElement('span');
     stake.className = 'stake';
@@ -556,15 +629,15 @@
   }
 
   function buildTable() {
-    els.grid.append(makeCell('n:0', '0', 'green', { c: 1, r: 1, rs: 3, mc: 1, mcs: 3, mr: 1 }));
+    els.grid.append(makeCell('n:0', '0', 'green', '', { c: 1, r: 1, rs: 3, mc: 1, mcs: 3, mr: 1 }));
     for (let n = 1; n <= 36; n++) {
       const vars = {
         c: 2 + Math.floor((n - 1) / 3), r: 3 - ((n - 1) % 3),
         mc: ((n - 1) % 3) + 1, mr: 2 + Math.floor((n - 1) / 3),
       };
-      els.grid.append(makeCell(`n:${n}`, String(n), colorOf(n), vars));
+      els.grid.append(makeCell(`n:${n}`, String(n), colorOf(n), '', vars));
     }
-    OUTSIDE.forEach((o) => els.outside.append(makeCell(o.key, o.label, `outside-cell ${o.cls || ''}`)));
+    OUTSIDE.forEach((o) => els.outside.append(makeCell(o.key, o.label, o.cls, 'outside-cell')));
 
     CHIPS.forEach((c) => {
       const b = document.createElement('button');
@@ -573,6 +646,7 @@
       b.setAttribute('role', 'radio');
       b.setAttribute('aria-label', `${c.v}枚`);
       b.style.setProperty('--chip', c.bg);
+      b.style.setProperty('--edge', c.edge);
       b.style.setProperty('--chip-text', c.fg);
       b.textContent = String(c.v);
       b.dataset.v = String(c.v);
@@ -684,14 +758,28 @@
   // ---------- 描画 ----------
   const short = (v) => (v >= 10000 ? `${Math.floor(v / 1000)}k` : String(v));
 
-  function renderAll() {
+  const ICON_SOUND_ON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg>';
+  const ICON_SOUND_OFF = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="m16 9 6 6"/><path d="m22 9-6 6"/></svg>';
+
+  function fillSlider(input) {
+    const min = Number(input.min);
+    const max = Number(input.max);
+    input.style.setProperty('--p', `${((Number(input.value) - min) / (max - min)) * 100}%`);
+  }
+
+  function renderAll(fresh) {
     const staked = totalStaked();
     els.balance.textContent = String(state.balance);
     els.staked.textContent = String(staked);
 
     cellEls.forEach((el, key) => {
       const amount = state.bets.get(key) || 0;
-      el.querySelector('.stake').textContent = amount ? short(amount) : '';
+      const stake = el.querySelector('.stake');
+      const text = amount ? short(amount) : '';
+      if (stake.textContent !== text) {
+        stake.textContent = text;
+        stake.classList.toggle('wide', text.length >= 3);
+      }
       el.disabled = state.spinning;
       const label = el.firstChild.textContent;
       el.setAttribute('aria-label', amount ? `${label} に ${amount} 枚` : `${label} に賭ける`);
@@ -711,17 +799,25 @@
 
     els.wheelOut.textContent = `${state.wheelSpeed.toFixed(2)} 回転/秒`;
     els.ballOut.textContent = `${state.ballSpeed.toFixed(1)} 回転/秒`;
-    els.sound.textContent = state.sound ? '音 ON' : '音 OFF';
+    fillSlider(els.wheelSpeed);
+    fillSlider(els.ballSpeed);
+    els.sound.innerHTML = `${state.sound ? ICON_SOUND_ON : ICON_SOUND_OFF}<span>${state.sound ? 'ON' : 'OFF'}</span>`;
     els.sound.setAttribute('aria-pressed', String(state.sound));
+    els.sound.setAttribute('aria-label', state.sound ? '効果音 ON' : '効果音 OFF');
 
     els.history.textContent = '';
-    state.history.forEach((n) => {
+    state.history.forEach((n, i) => {
       const li = document.createElement('li');
-      li.className = colorOf(n);
+      li.className = colorOf(n) + (fresh && i === 0 ? ' new' : '');
       li.textContent = String(n);
       els.history.append(li);
     });
     els.historyEmpty.hidden = state.history.length > 0;
+
+    const count = (c) => state.history.filter((n) => colorOf(n) === c).length;
+    els.historyStats.innerHTML = state.history.length
+      ? `<b class="s-red">赤 ${count('red')}</b> ・ <b>黒 ${count('black')}</b> ・ <b class="s-green">緑 ${count('green')}</b>`
+      : '';
   }
 
   // ---------- 起動 ----------
