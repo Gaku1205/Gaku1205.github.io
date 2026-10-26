@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ルーレット</title>
+  <meta name="description" content="コインを賭けて遊ぶ3Dカジノルーレット">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <h1>ROULETTE</h1>
+    <div class="wallet" aria-live="polite">
+      <span class="wallet-item"><span class="muted">コイン</span> <strong id="balance">1000</strong></span>
+      <span class="wallet-item"><span class="muted">賭け</span> <strong id="staked">0</strong></span>
+    </div>
+  </header>
+
+  <main class="app">
+    <section class="stage" aria-label="ルーレット盤">
+      <div class="wheel-wrap" id="wheelWrap">
+        <canvas id="scene" aria-label="3Dルーレット盤"></canvas>
+        <p class="fallback" id="fallback" hidden>3D表示に対応していないブラウザです。</p>
+      </div>
+
+      <div class="result" id="result" role="status" aria-live="polite">
+        <span class="ball-badge" id="resultBadge" hidden></span>
+        <span class="result-text" id="resultText">コインを置いて「SPIN」を押そう</span>
+      </div>
+
+      <button type="button" class="btn spin" id="spinBtn">SPIN</button>
+
+      <div class="settings">
+        <label class="slider">
+          <span class="slider-head"><span>盤の回転</span><output id="wheelOut"></output></span>
+          <input type="range" id="wheelSpeed" min="0" max="0.6" step="0.05" value="0.15">
+        </label>
+        <label class="slider">
+          <span class="slider-head"><span>ボールの射出</span><output id="ballOut"></output></span>
+          <input type="range" id="ballSpeed" min="1" max="6" step="0.5" value="3">
+        </label>
+        <button type="button" class="btn ghost" id="soundBtn" aria-pressed="true">音 ON</button>
+      </div>
+    </section>
+
+    <section class="table-panel" aria-label="ベットテーブル">
+      <div class="chips" id="chips" role="radiogroup" aria-label="コインの額"></div>
+
+      <div class="grid" id="grid"></div>
+      <div class="outside" id="outside"></div>
+
+      <div class="bet-actions">
+        <button type="button" class="btn small" id="undoBtn">ひとつ戻す</button>
+        <button type="button" class="btn small" id="clearBtn">全部戻す</button>
+        <button type="button" class="btn small" id="rebetBtn">前回と同じ</button>
+        <button type="button" class="btn small refill" id="refillBtn" hidden>コインを補充(1000)</button>
+      </div>
+      <p class="hint" id="hint">マスをタップして選んだコインを置けます。数字は36倍、赤黒・偶奇・1-18/19-36は2倍で戻ります。</p>
+
+      <h2 class="history-title">出目の履歴</h2>
+      <ol class="history" id="history"></ol>
+      <p class="muted" id="historyEmpty">まだ結果はありません</p>
+    </section>
+  </main>
+
+  <noscript><p class="noscript">このページはJavaScriptが必要です。</p></noscript>
+  <script src="lib/three.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
