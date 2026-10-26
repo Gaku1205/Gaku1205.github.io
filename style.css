@@ -272,19 +272,10 @@ button:focus-visible, input:focus-visible {
 
 .call { min-width: 0; }
 
-.call-fr {
-  margin: 0;
-  font-family: var(--f-display);
-  font-style: italic;
-  font-weight: 600;
-  font-size: var(--step-2);
-  line-height: 1.15;
-  color: var(--brass-hi);
-  font-variant-numeric: lining-nums;
-}
-
 .call-ja {
-  margin: 4px 0 0;
+  margin: 0;
+  font-size: var(--step-1);
+  font-weight: 500;
   color: var(--ivory);
   overflow-wrap: anywhere;
 }
@@ -666,6 +657,60 @@ button:focus-visible, input:focus-visible {
 
 .noscript { text-align: center; color: var(--mute); }
 
+/* ================= motion ================= */
+.flyer { position: fixed; margin: 0; z-index: 60; pointer-events: none; }
+
+.rake-chip {
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, var(--brass) 0 46%, var(--ivory) 47% 52%, transparent 53%),
+    repeating-conic-gradient(from -7.5deg, var(--ivory) 0 15deg, var(--brass) 15deg 60deg);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
+}
+
+.fly-coin {
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #f4e3b5, var(--brass) 55%, #7d6326);
+  box-shadow: inset 0 0 0 2px rgba(125, 99, 38, 0.7), 0 0 10px rgba(230, 204, 143, 0.5);
+}
+
+.stake.pending { visibility: hidden; }
+
+/* 結果の数字から広がる輪 */
+.medal { position: relative; }
+
+.medal::before, .medal::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  border: 2px solid var(--brass-hi);
+  opacity: 0;
+  pointer-events: none;
+  animation: burst 1.1s ease-out 0.15s;
+}
+
+.medal::after { animation-delay: 0.38s; }
+
+@keyframes burst {
+  0% { transform: scale(1); opacity: 0.9; }
+  100% { transform: scale(2.3); opacity: 0; }
+}
+
+/* 掛け声の切り替え */
+.call.swap .call-ja { animation: swap 0.45s ease-out both; }
+
+@keyframes swap {
+  from { opacity: 0; transform: translateY(6px); }
+}
+
+/* チップを置いたらスピンを促す */
+.spin.ready { animation: ready 2.4s ease-in-out infinite; }
+
+@keyframes ready {
+  50% { box-shadow: 0 1px 0 rgba(255, 255, 255, 0.35) inset, 0 0 0 4px rgba(230, 204, 143, 0.25), 0 10px 30px rgba(200, 163, 90, 0.45); }
+}
+
 /* ================= responsive ================= */
 @media (max-width: 960px) {
   .app { grid-template-columns: minmax(0, 1fr); gap: 20px; }
@@ -693,8 +738,7 @@ button:focus-visible, input:focus-visible {
   .purse-item { padding-left: 16px; margin-left: 16px; }
   .purse dd { font-size: 1.35rem; }
   .spin { min-width: 112px; padding: 0.85rem 1.3rem; }
-  .call-fr { font-size: 1.2rem; }
-  .call-ja { font-size: var(--step--1); }
+  .call-ja { font-size: var(--step-0); }
   .controls { grid-template-columns: 1fr; }
   .sound { justify-self: start; }
   .table { padding: 14px 12px; }

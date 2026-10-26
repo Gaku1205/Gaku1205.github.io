@@ -49,7 +49,7 @@
   const $ = (id) => document.getElementById(id);
   const els = {
     scene: $('scene'), wrap: $('wheelWrap'), fallback: $('fallback'),
-    call: $('call'), resultText: $('resultText'), spin: $('spinBtn'),
+    resultText: $('resultText'), spin: $('spinBtn'),
     wheelSpeed: $('wheelSpeed'), ballSpeed: $('ballSpeed'), wheelOut: $('wheelOut'), ballOut: $('ballOut'),
     sound: $('soundBtn'), balance: $('balance'), staked: $('staked'), delta: $('delta'),
     announce: $('announce'), announceNum: $('announceNum'), announceSub: $('announceSub'),
@@ -182,6 +182,20 @@
 
   let renderer, scene, camera, wheel, ballMesh;
   let phi = 0; // 盤の回転角(時計回り)
+  const ghosts = []; // 速いときのボールの残像
+  let glow = null; // 当たりポケットの光
+  let glowT = 0;
+
+  // カメラ演出。zoom 0 = 通常、正で寄り、負で引き。yaw は水平方向の回り込み
+  const rig = { zoom: reducedMotion ? 0 : -0.8, yaw: reducedMotion ? 0 : 0.6, targetZoom: 0, targetYaw: 0, speed: 1.1, release: 0 };
+
+  function camTo(zoom, yaw, speed) {
+    clearTimeout(rig.release);
+    if (reducedMotion) return;
+    rig.targetZoom = zoom;
+    rig.targetYaw = yaw;
+    rig.speed = speed;
+  }
 
   const ball = {
     phase: 'rest', // rest | orbit | drop
@@ -191,6 +205,7 @@
     psi: 0.5 * SEG, // 盤から見た角度(rest / drop 中)
     t: 0,
     w0: 0,
+    w: 0, // 現在の周回速度(回転/秒)
     drop: null,
   };
 
@@ -543,6 +558,16 @@
     ballMesh.castShadow = true;
     scene.add(ballMesh);
 
+    for (let k = 1; k <= 7; k++) {
+      const g = new THREE.Mesh(ballMesh.geometry, new THREE.MeshBasicMaterial({
+        color: srgb('#f4f0e6'), transparent: true, opacity: 0, depthWrite: false,
+      }));
+      g.scale.setScalar(1 - k * 0.07);
+      g.visible = false;
+      scene.add(g);
+      ghosts.push(g);
+    }
+
     resize();
     return true;
   }
@@ -572,6 +597,7 @@
     ball.t = 0;
     ball.theta = Math.random() * TAU;
     ball.w0 = state.ballSpeed * (0.92 + Math.random() * 0.16);
+    ball.w = ball.w0;
     ball.r = orbitR(ball.w0);
     ball.hop = 0;
   }
@@ -586,6 +612,8 @@
     ball.phase = 'drop';
     ball.t = 0;
     ball.drop = { psi0, delta, target, r0: ball.r, lastIdx: -1, lastHop: 0 };
+    ball.w = 0;
+    camTo(0.62, -0.14, 1.4);
   }
 
   function updateBall(dt) {
@@ -593,6 +621,7 @@
       ball.t += dt;
       const w = ball.w0 * Math.exp(-DECAY * ball.t);
       ball.theta -= w * TAU * dt;
+      ball.w = w;
       ball.r = orbitR(w);
       if ((ball.t >= 2 && w <= DROP_SPEED) || ball.t > 14) startDrop();
     } else if (ball.phase === 'drop') {
@@ -630,6 +659,91 @@
     }
   }
 
+  // 速く回っているボールの後ろに残像を並べる(ボールは角度が減る向きに進む)
+  function updateGhosts() {
+    const blur = ball.phase === 'orbit' && !reducedMotion ? Math.min(1, Math.max(0, (ball.w - 0.6) / 2.5)) : 0;
+    const step = Math.min(0.045, ball.w * 0.012);
+    ghosts.forEach((g, i) => {
+      const k = i + 1;
+      g.visible = blur > 0.01;
+      if (!g.visible) return;
+      const a = ball.theta + k * step;
+      g.position.set(Math.sin(a) * ball.r, ballMesh.position.y, -Math.cos(a) * ball.r);
+      g.material.opacity = blur * 0.5 * (1 - k / 8);
+    });
+  }
+
+  // 盤から見て i 番目のポケットの扇形
+  function sectorGeometry(i, r0, r1) {
+    const segs = 8;
+    const rings = 3;
+    const pos = [];
+    const idx = [];
+    for (let j = 0; j <= rings; j++) {
+      const r = r0 + ((r1 - r0) * j) / rings;
+      for (let s = 0; s <= segs; s++) {
+        const a = (i + s / segs) * SEG;
+        pos.push(Math.sin(a) * r, surfaceY(r) + 0.003, -Math.cos(a) * r);
+      }
+    }
+    for (let j = 0; j < rings; j++) {
+      for (let s = 0; s < segs; s++) {
+        const a = j * (segs + 1) + s;
+        const b = a + segs + 1;
+        idx.push(a, b, a + 1, b, b + 1, a + 1);
+      }
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    geo.setIndex(idx);
+    return geo;
+  }
+
+  function showGlow(i) {
+    clearGlow();
+    if (!renderer) return;
+    const mat = new THREE.MeshBasicMaterial({
+      color: srgb('#ffd98a'), transparent: true, opacity: 0,
+      blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
+    });
+    glow = new THREE.Group();
+    glow.add(new THREE.Mesh(sectorGeometry(i, POCKET_IN + 0.004, NUM_IN - 0.004), mat));
+    glow.add(new THREE.Mesh(sectorGeometry(i, NUM_IN + 0.002, ROTOR_R - 0.006), mat));
+    glow.userData.mat = mat;
+    wheel.add(glow);
+    glowT = 0;
+  }
+
+  function clearGlow() {
+    if (!glow) return;
+    wheel.remove(glow);
+    glow.children.forEach((m) => m.geometry.dispose());
+    glow.userData.mat.dispose();
+    glow = null;
+  }
+
+  function updateGlow(dt) {
+    if (!glow) return;
+    glowT += dt;
+    const pulse = reducedMotion ? 0.4 : 0.32 + 0.18 * Math.sin(glowT * 5);
+    glow.userData.mat.opacity = Math.min(1, glowT * 2.5) * pulse;
+  }
+
+  function updateCamera(dt) {
+    const k = 1 - Math.exp(-dt * rig.speed);
+    rig.zoom += (rig.targetZoom - rig.zoom) * k;
+    rig.yaw += (rig.targetYaw - rig.yaw) * k;
+    const z = rig.zoom;
+    const near = Math.max(0, z);
+    const lookY = -0.12 + 0.12 * near;
+    const lookZ = 0.12 - 0.1 * near;
+    const scale = 1 - 0.3 * z;
+    const oy = 4.42 * scale * (1 - 0.1 * near);
+    const oz = 3.43 * scale;
+    camera.position.set(Math.sin(rig.yaw) * oz, lookY + oy, lookZ + Math.cos(rig.yaw) * oz);
+    camera.lookAt(0, lookY, lookZ);
+  }
+
   let lastTime = performance.now();
   function frame(now) {
     requestAnimationFrame(frame);
@@ -643,23 +757,28 @@
     wheel.rotation.y = -phi;
     const y = surfaceY(ball.r) + BALL_R + ball.hop;
     ballMesh.position.set(Math.sin(ball.theta) * ball.r, y, -Math.cos(ball.theta) * ball.r);
+    updateGhosts();
+    updateGlow(dt);
+    updateCamera(dt);
     renderer.render(scene, camera);
   }
 
-  // ---------- 掛け声 ----------
-  const COLOR_FR = { rouge: 'Rouge', noir: 'Noir', vert: 'Zéro' };
+  // ---------- 状況の表示 ----------
   const COLOR_JA = { rouge: '赤', noir: '黒', vert: '緑' };
 
   function describe(n) {
-    const parts = [COLOR_FR[colorOf(n)]];
-    if (n > 0) parts.push(n % 2 ? 'Impair' : 'Pair', n <= 18 ? 'Manque' : 'Passe');
+    const parts = [COLOR_JA[colorOf(n)]];
+    if (n > 0) parts.push(n % 2 ? '奇数' : '偶数', n <= 18 ? '1–18' : '19–36');
     return parts;
   }
 
-  function setCall(fr, ja, tone) {
-    els.call.textContent = fr;
-    els.resultText.textContent = ja;
+  function setStatus(text, tone) {
+    els.resultText.textContent = text;
     els.resultText.className = `call-ja${tone ? ` ${tone}` : ''}`;
+    const box = els.resultText.parentElement;
+    box.classList.remove('swap');
+    void box.offsetWidth;
+    box.classList.add('swap');
   }
 
   // ---------- 回す ----------
@@ -669,8 +788,10 @@
     state.spinning = true;
     if (state.bets.size) state.lastBets = [...state.bets];
     clearHits();
+    clearGlow();
     hideAnnounce(true);
-    setCall('Rien ne va plus', 'ボールが回っています。賭けは締め切りです');
+    camTo(0.3, 0, 1.0);
+    setStatus('ボールが回っています。賭けは締め切りです');
     renderAll();
     launch();
 
@@ -683,6 +804,14 @@
 
   function finish(n) {
     const staked = totalStaked();
+    const prevBalance = state.balance;
+    // 片付けの演出用に、賭けていたマスの位置を先に控えておく
+    const winRects = [];
+    const loseRects = [];
+    for (const key of state.bets.keys()) {
+      const r = cellEls.get(key).querySelector('.stake').getBoundingClientRect();
+      if (r.width) (wins(key, n) ? winRects : loseRects).push(r);
+    }
     let payout = 0;
     for (const [key, amount] of state.bets) {
       if (wins(key, n)) payout += amount * returnOf(key);
@@ -695,39 +824,122 @@
     state.spinning = false;
 
     const col = colorOf(n);
-    const fr = `${n} · ${describe(n).join(' · ')}`;
+    const head = `${n}(${describe(n).join('・')})`;
     const net = payout - staked;
     let line;
     if (staked === 0) {
-      setCall(fr, `${n}(${COLOR_JA[col]})。チップを置くと賭けられます`);
+      setStatus(`${head}。チップを置くと賭けられます`);
       line = describe(n).join(' · ');
       sfx.clack();
     } else if (payout === 0) {
-      setCall(fr, `外れ。${staked}枚を失いました`, 'lose');
+      setStatus(`${head}。外れ、${staked}枚を失いました`, 'lose');
       line = `−${staked}`;
       sfx.lose();
       showDelta(-staked);
     } else {
       if (net > 0) {
-        setCall(fr, `当たり。${payout}枚が戻り、${net}枚の勝ちです`, 'win');
+        setStatus(`${head}。当たり、${payout}枚が戻り${net}枚の勝ちです`, 'win');
         line = `+${net}`;
         coinRain(net);
       } else if (net === 0) {
-        setCall(fr, `${payout}枚が戻り、差し引きゼロです`);
+        setStatus(`${head}。${payout}枚が戻り、差し引きゼロです`);
         line = '±0';
       } else {
-        setCall(fr, `${payout}枚が戻りました。差し引き${-net}枚の負けです`, 'lose');
+        setStatus(`${head}。${payout}枚が戻り、差し引き${-net}枚の負けです`, 'lose');
         line = `−${-net}`;
       }
       sfx.win();
-      bump();
       showDelta(net);
+      tweenBalance(prevBalance, state.balance, 650);
     }
 
     showAnnounce(n, col, line, net > 0 && staked > 0);
+    showGlow(ORDER.indexOf(n));
+    if (!reducedMotion) rig.release = setTimeout(() => camTo(0, 0, 0.9), 2400);
     markHits(n);
     save();
     renderAll(true);
+    animateSettlement(winRects, loseRects);
+  }
+
+  // ---------- チップとコインの動き ----------
+  function fly(node, from, to, { scale = 1, arc = 0, duration = 500, delay = 0, fade = false } = {}) {
+    node.classList.add('flyer');
+    Object.assign(node.style, {
+      left: `${from.left}px`, top: `${from.top}px`, width: `${from.width}px`, height: `${from.height}px`,
+    });
+    document.body.append(node);
+    const dx = to.left + to.width / 2 - (from.left + from.width / 2);
+    const dy = to.top + to.height / 2 - (from.top + from.height / 2);
+    const anim = node.animate([
+      { transform: 'translate(0, 0) scale(1)', opacity: 1 },
+      { transform: `translate(${dx / 2}px, ${dy / 2 - arc}px) scale(${(1 + scale) / 2})`, opacity: 1, offset: 0.5 },
+      { transform: `translate(${dx}px, ${dy}px) scale(${scale})`, opacity: fade ? 0 : 1 },
+    ], { duration, delay, easing: 'ease-in-out', fill: 'both' });
+    return anim.finished.then(() => node.remove(), () => node.remove());
+  }
+
+  // 選んだチップがマスへ飛んでいく
+  function flyChipTo(key, amount) {
+    if (reducedMotion) return;
+    const src = els.chips.querySelector(`.chip[data-v="${amount}"]`);
+    const stake = cellEls.get(key).querySelector('.stake');
+    const to = stake.getBoundingClientRect();
+    if (!src || !to.width) return;
+    const node = src.cloneNode(true);
+    node.setAttribute('aria-hidden', 'true');
+    node.setAttribute('aria-checked', 'false');
+    node.tabIndex = -1;
+    stake.classList.add('pending');
+    fly(node, src.getBoundingClientRect(), to, { scale: to.height / src.offsetHeight, arc: 70, duration: 420 })
+      .then(() => stake.classList.remove('pending'));
+  }
+
+  // 負けたチップは回収され、勝ったマスからはコインが手持ちへ飛ぶ
+  function animateSettlement(winRects, loseRects) {
+    if (reducedMotion) return;
+    const bank = els.balance.getBoundingClientRect();
+    loseRects.forEach((r, i) => {
+      const chip = document.createElement('span');
+      chip.className = 'rake-chip';
+      const to = { left: r.left, top: r.top - 60, width: r.width, height: r.height };
+      fly(chip, r, to, { scale: 0.6, duration: 600, delay: 250 + i * 40, fade: true });
+    });
+    winRects.forEach((r, i) => {
+      for (let j = 0; j < 4; j++) {
+        const coin = document.createElement('span');
+        coin.className = 'fly-coin';
+        fly(coin, r, bank, { scale: 0.7, arc: 90 + j * 12, duration: 700, delay: 150 + i * 90 + j * 60, fade: true });
+      }
+    });
+  }
+
+  // 手持ちの数字をカウントアップ
+  const balanceTween = { raf: 0, active: false };
+
+  function tweenBalance(from, to, delay) {
+    if (reducedMotion || from === to) {
+      bump();
+      return;
+    }
+    cancelAnimationFrame(balanceTween.raf);
+    balanceTween.active = true;
+    els.balance.textContent = String(from);
+    const t0 = performance.now() + delay;
+    const dur = 800;
+    const step = (now) => {
+      const u = Math.min(1, Math.max(0, (now - t0) / dur));
+      const e = 1 - Math.pow(1 - u, 3);
+      els.balance.textContent = String(Math.round(from + (to - from) * e));
+      if (u < 1) {
+        balanceTween.raf = requestAnimationFrame(step);
+      } else {
+        balanceTween.active = false;
+        els.balance.textContent = String(state.balance);
+        bump();
+      }
+    };
+    balanceTween.raf = requestAnimationFrame(step);
   }
 
   // ---------- 演出 ----------
@@ -884,6 +1096,7 @@
     sfx.coin();
     save();
     renderAll();
+    flyChipTo(key, amount);
   }
 
   function removeBet(key) {
@@ -967,7 +1180,7 @@
 
   function renderAll(fresh) {
     const staked = totalStaked();
-    els.balance.textContent = String(state.balance);
+    if (!balanceTween.active) els.balance.textContent = String(state.balance);
     els.staked.textContent = String(staked);
 
     cellEls.forEach((el, key) => {
@@ -988,6 +1201,7 @@
     });
 
     els.spin.disabled = state.spinning;
+    els.spin.classList.toggle('ready', !state.spinning && staked > 0);
     els.undo.disabled = state.spinning || !state.placed.length;
     els.clear.disabled = state.spinning || staked === 0;
     els.rebet.disabled = state.spinning || !state.lastBets.length;
